@@ -3,6 +3,7 @@ package stategen
 import (
 	"context"
 	stderrors "errors"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
@@ -93,7 +94,7 @@ func (s *State) StateByRootNoCopy(ctx context.Context, blockRoot [32]byte) (stat
 // ActiveNonSlashedBalancesByRoot retrieves the effective balances of all active and non-slashed validators at the
 // state with a given root
 func (s *State) ActiveNonSlashedBalancesByRoot(ctx context.Context, blockRoot [32]byte) ([]uint64, error) {
-	st, err := s.StateByRoot(ctx, blockRoot)
+	st, err := s.StateByRootNoCopy(ctx, blockRoot)
 	if err != nil {
 		return nil, err
 	}
