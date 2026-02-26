@@ -66,6 +66,23 @@ func (s *State) StateByRoot(ctx context.Context, blockRoot [32]byte) (state.Beac
 	return s.loadStateByRoot(ctx, blockRoot)
 }
 
+// StateByRootNoCopy retrieves the state using input block root without copying from caches.
+// WARNING: The returned state MUST NOT be modified by the caller. It may be shared
+// with internal caches. Use StateByRoot if you need a mutable state.
+func (s *State) StateByRootNoCopy(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "stateGen.StateByRootNoCopy")
+	defer span.End()
+
+	if blockRoot == params.BeaconConfig().ZeroHash {
+		root, err := s.beaconDB.GenesisBlockRoot(ctx)
+		if err != nil {
+			return nil, stderrors.Join(ErrNoGenesisBlock, err)
+		}
+		blockRoot = root
+	}
+	return s.loadStateByRootNoCopy(ctx, blockRoot)
+}
+
 // ActiveNonSlashedBalancesByRoot retrieves the effective balances of all active and non-slashed validators at the
 // state with a given root
 func (s *State) ActiveNonSlashedBalancesByRoot(ctx context.Context, blockRoot [32]byte) ([]uint64, error) {
