@@ -2,6 +2,7 @@ package stategen
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 
@@ -103,6 +104,28 @@ func (e *epochBoundaryState) getByBlockRootLockFree(r [32]byte) (*rootStateInfo,
 		root:  r,
 		state: s.state.Copy(),
 	}, true, nil
+}
+
+// getByBlockRootNoCopy returns the state without copying. The returned state MUST NOT be modified.
+func (e *epochBoundaryState) getByBlockRootNoCopy(r [32]byte) (*rootStateInfo, bool, error) {
+	e.lock.RLock()
+	defer e.lock.RUnlock()
+
+	obj, exists, err := e.rootStateCache.GetByKey(string(r[:]))
+	if err != nil {
+		return nil, false, fmt.Errorf("get by key: %w", err)
+	}
+
+	if !exists {
+		return nil, false, nil
+	}
+
+	s, ok := obj.(*rootStateInfo)
+	if !ok {
+		return nil, false, errNotRootStateInfo
+	}
+
+	return s, true, nil
 }
 
 // get epoch boundary state by its slot. Returns copied state in state info object if exists. Otherwise returns nil.
