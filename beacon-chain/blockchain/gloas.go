@@ -1,8 +1,10 @@
 package blockchain
 
 import (
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
@@ -13,6 +15,13 @@ import (
 func (s *Service) getLookupParentRoot(b consensus_blocks.ROBlock) ([32]byte, error) {
 	bl := b.Block()
 	parentRoot := bl.ParentRoot()
+	parentSlot, err := s.cfg.ForkChoiceStore.Slot(parentRoot)
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "failed to get slot for parent root")
+	}
+	if slots.ToEpoch(parentSlot) < params.BeaconConfig().GloasForkEpoch {
+		return parentRoot, nil
+	}
 	if b.Version() < version.Gloas {
 		return parentRoot, nil
 	}

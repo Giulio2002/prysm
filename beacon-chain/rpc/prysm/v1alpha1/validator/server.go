@@ -71,6 +71,7 @@ type Server struct {
 	ExitPool                   voluntaryexits.PoolManager
 	SyncCommitteePool          synccommittee.Pool
 	BlockReceiver              blockchain.BlockReceiver
+	ExecutionPayloadEnvelopeReceiver blockchain.ExecutionPayloadEnvelopeReceiver
 	BlobReceiver               blockchain.BlobReceiver
 	DataColumnReceiver         blockchain.DataColumnReceiver
 	MockEth1Votes              bool

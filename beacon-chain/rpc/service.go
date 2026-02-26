@@ -88,6 +88,7 @@ type Config struct {
 	FinalizationFetcher       blockchain.FinalizationFetcher
 	AttestationReceiver       blockchain.AttestationReceiver
 	BlockReceiver             blockchain.BlockReceiver
+	ExecutionPayloadEnvelopeReceiver blockchain.ExecutionPayloadEnvelopeReceiver
 	BlobReceiver              blockchain.BlobReceiver
 	DataColumnReceiver        blockchain.DataColumnReceiver
 	ExecutionChainService     execution.Chain
@@ -239,6 +240,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		OperationNotifier:       s.cfg.OperationNotifier,
 		P2P:                     s.cfg.Broadcaster,
 		BlockReceiver:           s.cfg.BlockReceiver,
+		ExecutionPayloadEnvelopeReceiver: s.cfg.ExecutionPayloadEnvelopeReceiver,
 		BlobReceiver:            s.cfg.BlobReceiver,
 		DataColumnReceiver:      s.cfg.DataColumnReceiver,
 		MockEth1Votes:           s.cfg.MockEth1Votes,
