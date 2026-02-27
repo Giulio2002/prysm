@@ -103,12 +103,11 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	}
 	if cfg.roblock.Version() < version.Gloas {
 		s.sendFCU(cfg)
-	} else {
-		// For Gloas blocks, the execution payload arrives separately via the payload envelope.
-		// We still need to save the head so that HeadRoot() returns the correct canonical block.
-		if err := s.saveHeadNoDB(cfg.ctx, cfg.roblock, cfg.headRoot, cfg.postState, true /* optimistic */); err != nil {
-			log.WithError(err).Error("Could not save head for gloas block")
+	} else if s.isNewHead(cfg.headRoot) {
+		if err := s.saveHead(ctx, cfg.headRoot, cfg.roblock, cfg.postState); err != nil {
+			log.WithError(err).Error("Could not save head")
 		}
+		s.pruneAttsFromPool(ctx, cfg.postState, cfg.roblock)
 	}
 
 	// Pre-Fulu the caches are updated when computing the payload attributes
