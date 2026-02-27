@@ -231,9 +231,11 @@ func (s *Service) HeadStateReadOnly(ctx context.Context) (state.ReadOnlyBeaconSt
 	span.SetAttributes(trace.BoolAttribute("cache_hit", ok))
 
 	if ok {
+		headStateCacheHit.Inc()
 		return s.headStateReadOnly(ctx), nil
 	}
 
+	headStateCacheMiss.Inc()
 	return s.cfg.StateGen.StateByRoot(ctx, s.headRoot())
 }
 

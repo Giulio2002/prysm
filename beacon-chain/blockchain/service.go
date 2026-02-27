@@ -70,6 +70,7 @@ type Service struct {
 	lcStore                        *lightClient.Store
 	startWaitingDataColumnSidecars chan bool // for testing purposes only
 	syncCommitteeHeadState         *cache.SyncCommitteeHeadStateCache
+	serviceStartTime               time.Time
 }
 
 // config options for the service.
@@ -207,12 +208,14 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 
 // Start a blockchain service's main event loop.
 func (s *Service) Start() {
+	s.serviceStartTime = time.Now()
 	defer s.removeStartupState()
 	if err := s.StartFromSavedState(s.cfg.FinalizedStateAtStartUp); err != nil {
 		log.Fatal(err)
 	}
 	s.spawnProcessAttestationsRoutine()
 	go s.runLateBlockTasks()
+	go s.logPreviousEpochHeadCountdown()
 }
 
 // Stop the blockchain service's main event loop and associated goroutines.

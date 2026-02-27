@@ -19,10 +19,46 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// usePreviousEpochHeadDelay is the duration after service start before allowing the head state
+// to be used for validating attestations from the previous epoch.
+const usePreviousEpochHeadDelay = 6 * time.Hour
+
+// logPreviousEpochHeadCountdown logs the time remaining before the previous epoch head optimization
+// is enabled. It logs every minute until the delay has elapsed.
+func (s *Service) logPreviousEpochHeadCountdown() {
+	previousEpochHeadRemainingSeconds.Set(usePreviousEpochHeadDelay.Seconds())
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-ticker.C:
+			elapsed := time.Since(s.serviceStartTime)
+			if elapsed >= usePreviousEpochHeadDelay {
+				previousEpochHeadRemainingSeconds.Set(0)
+				log.Info("Previous epoch head optimization is now enabled")
+				return
+			}
+			remaining := usePreviousEpochHeadDelay - elapsed
+			previousEpochHeadRemainingSeconds.Set(remaining.Seconds())
+			log.WithField("remaining", remaining.Truncate(time.Minute)).Info("Time remaining before previous epoch head optimization")
+		}
+	}
+}
+
 // The caller of this function must have a lock on forkchoice.
 func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) state.ReadOnlyBeaconState {
 	headEpoch := slots.ToEpoch(s.HeadSlot())
-	if c.Epoch+1 < headEpoch || c.Epoch == 0 {
+	// After usePreviousEpochHeadDelay has elapsed since start, use the head state to validate
+	// attestations for the previous epoch as well. Before that, only use the head state for the
+	// current epoch.
+	usePrevEpoch := !s.serviceStartTime.IsZero() && time.Since(s.serviceStartTime) >= usePreviousEpochHeadDelay
+	if usePrevEpoch {
+		if c.Epoch+1 < headEpoch || c.Epoch == 0 {
+			return nil
+		}
+	} else if c.Epoch < headEpoch || c.Epoch == 0 {
 		return nil
 	}
 	// Only use head state if the head state is compatible with the target checkpoint.
@@ -30,13 +66,17 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 	if err != nil {
 		return nil
 	}
-	// headEpoch - 1 equals c.Epoch if c is from the previous epoch and equals c.Epoch - 1 if c is from the current epoch.
-	// We don't use the smaller c.Epoch - 1 because forkchoice would not have the data to answer that.
-	headDependent, err := s.cfg.ForkChoiceStore.DependentRootForEpoch([32]byte(headRoot), headEpoch-1)
+	depEpoch := c.Epoch - 1
+	if usePrevEpoch {
+		// headEpoch - 1 equals c.Epoch if c is from the previous epoch and equals c.Epoch - 1 if c is from the current epoch.
+		// We don't use the smaller c.Epoch - 1 because forkchoice would not have the data to answer that.
+		depEpoch = headEpoch - 1
+	}
+	headDependent, err := s.cfg.ForkChoiceStore.DependentRootForEpoch([32]byte(headRoot), depEpoch)
 	if err != nil {
 		return nil
 	}
-	targetDependent, err := s.cfg.ForkChoiceStore.DependentRootForEpoch([32]byte(c.Root), headEpoch-1)
+	targetDependent, err := s.cfg.ForkChoiceStore.DependentRootForEpoch([32]byte(c.Root), depEpoch)
 	if err != nil {
 		return nil
 	}
@@ -45,10 +85,16 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 	}
 
 	// If the head state alone is enough, we can return it directly read only.
-	if c.Epoch <= headEpoch {
+	if (usePrevEpoch && c.Epoch <= headEpoch) || (!usePrevEpoch && c.Epoch == headEpoch) {
 		st, err := s.HeadStateReadOnly(ctx)
 		if err != nil {
+			headStateReadOnlyFailCount.Inc()
 			return nil
+		}
+		if c.Epoch == headEpoch {
+			headStateCurrentEpochAttCount.Inc()
+		} else {
+			headStatePreviousEpochAttCount.Inc()
 		}
 		return st
 	}

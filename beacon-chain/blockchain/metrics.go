@@ -221,6 +221,30 @@ var (
 			Buckets: []float64{1, 2, 4, 8, 16, 32},
 		},
 	)
+	headStateCurrentEpochAttCount = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "head_state_current_epoch_att_total",
+		Help: "Count the number of times the head state was used to validate a current epoch attestation",
+	})
+	headStatePreviousEpochAttCount = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "head_state_previous_epoch_att_total",
+		Help: "Count the number of times the head state was used to validate a previous epoch attestation",
+	})
+	headStateReadOnlyFailCount = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "head_state_read_only_fail_total",
+		Help: "Count the number of times HeadStateReadOnly failed during attestation pre-state retrieval",
+	})
+	previousEpochHeadRemainingSeconds = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "previous_epoch_head_remaining_seconds",
+		Help: "Seconds remaining before the previous epoch head optimization is enabled",
+	})
+	headStateCacheHit = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "head_state_cache_hit_total",
+		Help: "Count the number of times HeadStateReadOnly found the head state in cache",
+	})
+	headStateCacheMiss = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "head_state_cache_miss_total",
+		Help: "Count the number of times HeadStateReadOnly had to fetch the head state from DB",
+	})
 )
 
 // reportSlotMetrics reports slot related metrics.
