@@ -63,23 +63,7 @@ func ExecuteStateTransitionNoVerifyAnySig(
 	interop.WriteBlockToDisk(signed, false /* Has the block failed */)
 	interop.WriteStateToDisk(st)
 
-	accessRoot := signed.Block().ParentRoot()
-	if signed.Version() >= version.Gloas && st.Version() >= version.Gloas {
-		signedBid, err := signed.Block().Body().SignedExecutionPayloadBid()
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "could not get signed execution payload bid from block body")
-		}
-		parentHash := signedBid.Message.ParentBlockHash
-		latestBid, err := st.LatestExecutionPayloadBid()
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "could not get latest bid from state")
-		}
-		latestHash := latestBid.BlockHash()
-		if bytes.Equal(parentHash, latestHash[:]) {
-			accessRoot = latestHash
-		}
-	}
-	st, err = ProcessSlotsUsingNextSlotCache(ctx, st, accessRoot[:], signed.Block().Slot())
+	st, err = NSCProcessSlotToValidate(ctx, st, signed.Block())
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not process slots")
 	}
@@ -150,8 +134,7 @@ func CalculateStateRoot(
 
 	// Execute per slots transition.
 	var err error
-	parentRoot := signed.Block().ParentRoot()
-	state, err = ProcessSlotsUsingNextSlotCache(ctx, state, parentRoot[:], signed.Block().Slot())
+	state, err = NSCProcessSlotToValidate(ctx, state, signed.Block())
 	if err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not process slots")
 	}
