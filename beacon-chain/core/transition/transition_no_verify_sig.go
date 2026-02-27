@@ -63,8 +63,23 @@ func ExecuteStateTransitionNoVerifyAnySig(
 	interop.WriteBlockToDisk(signed, false /* Has the block failed */)
 	interop.WriteStateToDisk(st)
 
-	parentRoot := signed.Block().ParentRoot()
-	st, err = ProcessSlotsUsingNextSlotCache(ctx, st, parentRoot[:], signed.Block().Slot())
+	accessRoot := signed.Block().ParentRoot()
+	if signed.Version() >= version.Gloas && st.Version() >= version.Gloas {
+		signedBid, err := signed.Block().Body().SignedExecutionPayloadBid()
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "could not get signed execution payload bid from block body")
+		}
+		parentHash := signedBid.Message.ParentBlockHash
+		latestBid, err := st.LatestExecutionPayloadBid()
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "could not get latest bid from state")
+		}
+		latestHash := latestBid.BlockHash()
+		if bytes.Equal(parentHash, latestHash[:]) {
+			accessRoot = latestHash
+		}
+	}
+	st, err = ProcessSlotsUsingNextSlotCache(ctx, st, accessRoot[:], signed.Block().Slot())
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not process slots")
 	}
