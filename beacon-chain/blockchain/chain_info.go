@@ -3,6 +3,10 @@ package blockchain
 import (
 	"bytes"
 	"context"
+	"reflect"
+	"runtime"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -21,6 +25,62 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
+
+// stateToken tracks how many trackedState wrappers exist for one underlying state.
+type stateToken struct {
+	refs int64 // accessed atomically
+}
+
+// stateTracker maps underlying state pointers to their shared tokens.
+type stateTracker struct {
+	mu     sync.Mutex
+	states map[uintptr]*stateToken
+}
+
+func newStateTracker() *stateTracker {
+	return &stateTracker{states: make(map[uintptr]*stateToken)}
+}
+
+type cleanupInfo struct {
+	tracker *stateTracker
+	ptr     uintptr
+	token   *stateToken
+}
+
+// track wraps a state and registers a GC cleanup.
+// Increments the gauge on first reference to a distinct state.
+func (tr *stateTracker) track(st state.ReadOnlyBeaconState) *trackedState {
+	ptr := reflect.ValueOf(st).Pointer()
+	tr.mu.Lock()
+	tok, exists := tr.states[ptr]
+	if !exists {
+		tok = &stateToken{}
+		tr.states[ptr] = tok
+		headStateOutstandingStates.Inc()
+	}
+	atomic.AddInt64(&tok.refs, 1)
+	tr.mu.Unlock()
+
+	ts := &trackedState{ReadOnlyBeaconState: st}
+	runtime.AddCleanup(ts, func(info cleanupInfo) {
+		if atomic.AddInt64(&info.token.refs, -1) == 0 {
+			info.tracker.mu.Lock()
+			if atomic.LoadInt64(&info.token.refs) == 0 {
+				delete(info.tracker.states, info.ptr)
+				headStateOutstandingStates.Dec()
+			}
+			info.tracker.mu.Unlock()
+		}
+	}, cleanupInfo{tracker: tr, ptr: ptr, token: tok})
+
+	return ts
+}
+
+// trackedState is a thin wrapper around ReadOnlyBeaconState.
+// Its lifetime is tracked by the GC via runtime.AddCleanup.
+type trackedState struct {
+	state.ReadOnlyBeaconState
+}
 
 // ChainInfoFetcher defines a common interface for methods in blockchain service which
 // directly retrieve chain info related data.
@@ -232,11 +292,15 @@ func (s *Service) HeadStateReadOnly(ctx context.Context) (state.ReadOnlyBeaconSt
 
 	if ok {
 		headStateCacheHit.Inc()
-		return s.headStateReadOnly(ctx), nil
+		return s.headStateTracker.track(s.headStateReadOnly(ctx)), nil
 	}
 
 	headStateCacheMiss.Inc()
-	return s.cfg.StateGen.StateByRoot(ctx, s.headRoot())
+	st, err := s.cfg.StateGen.StateByRoot(ctx, s.headRoot())
+	if err != nil {
+		return nil, err
+	}
+	return s.headStateTracker.track(st), nil
 }
 
 // HeadValidatorsIndices returns a list of active validator indices from the head view of a given epoch.

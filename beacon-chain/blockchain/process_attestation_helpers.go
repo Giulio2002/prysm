@@ -21,7 +21,7 @@ import (
 
 // usePreviousEpochHeadDelay is the duration after service start before allowing the head state
 // to be used for validating attestations from the previous epoch.
-const usePreviousEpochHeadDelay = 6 * time.Hour
+const usePreviousEpochHeadDelay = 10 * time.Hour
 
 // logPreviousEpochHeadCountdown logs the time remaining before the previous epoch head optimization
 // is enabled. It logs every minute until the delay has elapsed.

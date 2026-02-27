@@ -291,7 +291,9 @@ func TestRetrieveHead_ReadOnly(t *testing.T) {
 	rOnlyState, err := service.HeadStateReadOnly(ctx)
 	require.NoError(t, err)
 
-	assert.Equal(t, rOnlyState, service.head.state, "Head is not the same object")
+	ts, ok := rOnlyState.(*trackedState)
+	require.Equal(t, true, ok, "Expected *trackedState wrapper")
+	assert.Equal(t, ts.ReadOnlyBeaconState, service.head.state, "Head is not the same object")
 }
 
 func TestSaveOrphanedAtts(t *testing.T) {

@@ -245,6 +245,10 @@ var (
 		Name: "head_state_cache_miss_total",
 		Help: "Count the number of times HeadStateReadOnly had to fetch the head state from DB",
 	})
+	headStateOutstandingStates = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "head_state_outstanding_states",
+		Help: "Number of distinct head state objects held in memory by HeadStateReadOnly callers",
+	})
 )
 
 // reportSlotMetrics reports slot related metrics.

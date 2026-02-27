@@ -71,6 +71,7 @@ type Service struct {
 	startWaitingDataColumnSidecars chan bool // for testing purposes only
 	syncCommitteeHeadState         *cache.SyncCommitteeHeadStateCache
 	serviceStartTime               time.Time
+	headStateTracker               *stateTracker
 }
 
 // config options for the service.
@@ -190,6 +191,7 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 		cfg:                    &config{},
 		blockBeingSynced:       &currentlySyncingBlock{roots: make(map[[32]byte]struct{})},
 		syncCommitteeHeadState: cache.NewSyncCommitteeHeadState(),
+		headStateTracker:       newStateTracker(),
 	}
 	for _, opt := range opts {
 		if err := opt(srv); err != nil {
