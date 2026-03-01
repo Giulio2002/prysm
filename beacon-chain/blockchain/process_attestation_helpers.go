@@ -3,10 +3,14 @@ package blockchain
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"runtime/pprof"
 	"strconv"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/async"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -29,22 +33,66 @@ func (s *Service) logPreviousEpochHeadCountdown() {
 	previousEpochHeadRemainingSeconds.Set(usePreviousEpochHeadDelay.Seconds())
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
+	slotTicker := slots.NewSlotTicker(s.genesisTime, params.BeaconConfig().SecondsPerSlot)
+	defer slotTicker.Done()
+	type hasDBPath interface {
+		DatabasePath() string
+	}
+	var heapDir string
+	if db, ok := s.cfg.BeaconDB.(hasDBPath); ok {
+		heapDir = filepath.Join(filepath.Dir(db.DatabasePath()), "heap_dumps")
+	} else {
+		heapDir = "heap_dumps"
+	}
+	if err := os.MkdirAll(heapDir, 0700); err != nil {
+		log.WithError(err).Error("Could not create heap dump directory")
+	}
+	enabled := false
 	for {
 		select {
 		case <-s.ctx.Done():
 			return
 		case <-ticker.C:
 			elapsed := time.Since(s.serviceStartTime)
-			if elapsed >= usePreviousEpochHeadDelay {
+			if !enabled && elapsed >= usePreviousEpochHeadDelay {
 				previousEpochHeadRemainingSeconds.Set(0)
 				log.Info("Previous epoch head optimization is now enabled")
-				return
+				enabled = true
 			}
-			remaining := usePreviousEpochHeadDelay - elapsed
-			previousEpochHeadRemainingSeconds.Set(remaining.Seconds())
-			log.WithField("remaining", remaining.Truncate(time.Minute)).Info("Time remaining before previous epoch head optimization")
+			if !enabled {
+				remaining := usePreviousEpochHeadDelay - elapsed
+				previousEpochHeadRemainingSeconds.Set(remaining.Seconds())
+				log.WithField("remaining", remaining.Truncate(time.Minute)).Info("Time remaining before previous epoch head optimization")
+			}
+		case slot := <-slotTicker.C():
+			if slot.Mod(uint64(params.BeaconConfig().SlotsPerEpoch)) == 16 {
+				remaining := usePreviousEpochHeadDelay - time.Since(s.serviceStartTime)
+				writeHeapDump(heapDir, remaining)
+			}
 		}
 	}
+}
+
+func writeHeapDump(dir string, remaining time.Duration) {
+	var name string
+	minutes := int(remaining.Truncate(time.Minute).Minutes())
+	if remaining > 0 {
+		name = fmt.Sprintf("heap_before_%dmin.pprof", minutes)
+	} else {
+		name = fmt.Sprintf("heap_after_%dmin.pprof", -minutes)
+	}
+	filename := filepath.Join(dir, name)
+	f, err := os.Create(filename)
+	if err != nil {
+		log.WithError(err).WithField("file", filename).Error("Could not create heap dump file")
+		return
+	}
+	defer f.Close()
+	if err := pprof.WriteHeapProfile(f); err != nil {
+		log.WithError(err).WithField("file", filename).Error("Could not write heap dump")
+		return
+	}
+	log.WithField("file", filename).Info("Heap dump written")
 }
 
 // The caller of this function must have a lock on forkchoice.
