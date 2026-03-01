@@ -10,10 +10,11 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/async"
-	"github.com/OffchainLabs/prysm/v7/config/params"
+	file "github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -25,7 +26,7 @@ import (
 
 // usePreviousEpochHeadDelay is the duration after service start before allowing the head state
 // to be used for validating attestations from the previous epoch.
-const usePreviousEpochHeadDelay = 10 * time.Hour
+const usePreviousEpochHeadDelay = 8 * time.Hour
 
 // logPreviousEpochHeadCountdown logs the time remaining before the previous epoch head optimization
 // is enabled. It logs every minute until the delay has elapsed.
@@ -44,7 +45,7 @@ func (s *Service) logPreviousEpochHeadCountdown() {
 	} else {
 		heapDir = "heap_dumps"
 	}
-	if err := os.MkdirAll(heapDir, 0700); err != nil {
+	if err := file.MkdirAll(heapDir); err != nil {
 		log.WithError(err).Error("Could not create heap dump directory")
 	}
 	enabled := false
@@ -87,7 +88,11 @@ func writeHeapDump(dir string, remaining time.Duration) {
 		log.WithError(err).WithField("file", filename).Error("Could not create heap dump file")
 		return
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.WithError(err).WithField("file", filename).Error("Could not close heap dump file")
+		}
+	}()
 	if err := pprof.WriteHeapProfile(f); err != nil {
 		log.WithError(err).WithField("file", filename).Error("Could not write heap dump")
 		return
