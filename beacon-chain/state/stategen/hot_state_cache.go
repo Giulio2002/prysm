@@ -22,6 +22,10 @@ var (
 		Name: "hot_state_cache_miss",
 		Help: "The total number of cache misses on the hot state cache.",
 	})
+	hotStateCacheSize_ = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "hot_state_cache_size",
+		Help: "The current number of items in the hot state cache.",
+	})
 )
 
 // hotStateCache is used to store the processed beacon state after finalized check point.
@@ -78,6 +82,7 @@ func (c *hotStateCache) put(blockRoot [32]byte, state state.BeaconState) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.cache.Add(blockRoot, state)
+	hotStateCacheSize_.Set(float64(c.cache.Len()))
 }
 
 // has returns true if the key exists in the cache.
@@ -91,5 +96,7 @@ func (c *hotStateCache) has(blockRoot [32]byte) bool {
 func (c *hotStateCache) delete(blockRoot [32]byte) bool {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	return c.cache.Remove(blockRoot)
+	removed := c.cache.Remove(blockRoot)
+	hotStateCacheSize_.Set(float64(c.cache.Len()))
+	return removed
 }
