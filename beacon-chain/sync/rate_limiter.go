@@ -106,6 +106,9 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 
 	// ExecutionPayloadEnvelopesByRangeV1
 	topicMap[addEncoding(p2p.RPCExecutionPayloadEnvelopesByRangeTopicV1)] = envelopeCollector
+	// ExecutionPayloadEnvelopesByRootV1
+	// Envelopes are 1:1 with blocks (one per slot), so block-level rate parameters apply.
+	topicMap[addEncoding(p2p.RPCExecutionPayloadEnvelopesByRootTopicV1)] = envelopeCollector
 
 	// General topic for all rpc requests.
 	topicMap[rpcLimiterTopic] = leakybucket.NewCollector(5, defaultBurstLimit*2, leakyBucketPeriod, false /* deleteEmptyBuckets */)

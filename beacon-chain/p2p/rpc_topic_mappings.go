@@ -70,6 +70,8 @@ const (
 
 	// ExecutionPayloadEnvelopesByRangeName is the name for the ExecutionPayloadEnvelopesByRange v1 message topic.
 	ExecutionPayloadEnvelopesByRangeName = "/execution_payload_envelopes_by_range"
+	// ExecutionPayloadEnvelopesByRootName is the name for the ExecutionPayloadEnvelopesByRoot v1 message topic.
+	ExecutionPayloadEnvelopesByRootName = "/execution_payload_envelopes_by_root"
 )
 
 const (
@@ -113,6 +115,9 @@ const (
 	// in the slot range [start_slot, start_slot + count). New in Gloas.
 	// /eth2/beacon_chain/req/execution_payload_envelopes_by_range/1/
 	RPCExecutionPayloadEnvelopesByRangeTopicV1 = protocolPrefix + ExecutionPayloadEnvelopesByRangeName + SchemaVersionV1
+	// RPCExecutionPayloadEnvelopesByRootTopicV1 is a topic for requesting execution payload envelopes by their beacon block root.
+	// /eth2/beacon_chain/req/execution_payload_envelopes_by_root/1 - New in Gloas.
+	RPCExecutionPayloadEnvelopesByRootTopicV1 = protocolPrefix + ExecutionPayloadEnvelopesByRootName + SchemaVersionV1
 
 	// V2 RPC Topics
 	// RPCStatusTopicV2 defines the v1 topic for the status rpc method.
@@ -180,6 +185,9 @@ var (
 
 		// DataColumnSidecarsByRoot v1 Message
 		RPCDataColumnSidecarsByRootTopicV1: p2ptypes.DataColumnsByRootIdentifiers{},
+
+		// ExecutionPayloadEnvelopesByRoot v1 Message
+		RPCExecutionPayloadEnvelopesByRootTopicV1: new(p2ptypes.ExecutionPayloadEnvelopesByRootReq),
 	}
 
 	// Maps all registered protocol prefixes.
@@ -204,6 +212,7 @@ var (
 		DataColumnSidecarsByRootName:         true,
 		DataColumnSidecarsByRangeName:        true,
 		ExecutionPayloadEnvelopesByRangeName: true,
+		ExecutionPayloadEnvelopesByRootName: true,
 	}
 
 	// Maps all the RPC messages which are to updated in altair.
