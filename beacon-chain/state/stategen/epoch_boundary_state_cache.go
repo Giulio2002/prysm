@@ -7,6 +7,8 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -16,6 +18,11 @@ var (
 	maxCacheSize        = uint64(8)
 	errNotSlotRootInfo  = errors.New("not slot root info type")
 	errNotRootStateInfo = errors.New("not root state info type")
+
+	epochBoundaryStateCacheSize = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "epoch_boundary_state_cache_size",
+		Help: "The current number of items in the epoch boundary state cache.",
+	})
 )
 
 // slotRootInfo specifies the slot root info in the epoch boundary state cache.
@@ -148,6 +155,8 @@ func (e *epochBoundaryState) put(blockRoot [32]byte, s state.BeaconState) error 
 	trim(e.rootStateCache, maxCacheSize)
 	trim(e.slotRootCache, maxCacheSize)
 
+	epochBoundaryStateCacheSize.Set(float64(len(e.rootStateCache.ListKeys())))
+
 	return nil
 }
 
@@ -169,9 +178,13 @@ func (e *epochBoundaryState) delete(blockRoot [32]byte) error {
 	if err = e.slotRootCache.Delete(slotInfo); err != nil {
 		return err
 	}
-	return e.rootStateCache.Delete(&rootStateInfo{
+	if err := e.rootStateCache.Delete(&rootStateInfo{
 		root: blockRoot,
-	})
+	}); err != nil {
+		return err
+	}
+	epochBoundaryStateCacheSize.Set(float64(len(e.rootStateCache.ListKeys())))
+	return nil
 }
 
 // trim the FIFO queue to the maxSize.
