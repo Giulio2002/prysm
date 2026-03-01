@@ -67,6 +67,9 @@ const (
 
 	// DataColumnSidecarsByRangeName is the name for the DataColumnSidecarsByRange v1 message topic.
 	DataColumnSidecarsByRangeName = "/data_column_sidecars_by_range"
+
+	// ExecutionPayloadEnvelopesByRangeName is the name for the ExecutionPayloadEnvelopesByRange v1 message topic.
+	ExecutionPayloadEnvelopesByRangeName = "/execution_payload_envelopes_by_range"
 )
 
 const (
@@ -106,6 +109,10 @@ const (
 	// RPCDataColumnSidecarsByRangeTopicV1 is a topic for requesting data column sidecars by their slot.
 	// /eth2/beacon_chain/req/data_column_sidecars_by_range/1 - New in Fulu.
 	RPCDataColumnSidecarsByRangeTopicV1 = protocolPrefix + DataColumnSidecarsByRangeName + SchemaVersionV1
+	// RPCExecutionPayloadEnvelopesByRangeTopicV1 is a topic for requesting execution payload envelopes
+	// in the slot range [start_slot, start_slot + count). New in Gloas.
+	// /eth2/beacon_chain/req/execution_payload_envelopes_by_range/1/
+	RPCExecutionPayloadEnvelopesByRangeTopicV1 = protocolPrefix + ExecutionPayloadEnvelopesByRangeName + SchemaVersionV1
 
 	// V2 RPC Topics
 	// RPCStatusTopicV2 defines the v1 topic for the status rpc method.
@@ -168,6 +175,9 @@ var (
 		// DataColumnSidecarsByRange v1 Message
 		RPCDataColumnSidecarsByRangeTopicV1: new(pb.DataColumnSidecarsByRangeRequest),
 
+		// ExecutionPayloadEnvelopesByRange v1 Message
+		RPCExecutionPayloadEnvelopesByRangeTopicV1: new(pb.ExecutionPayloadEnvelopesByRangeRequest),
+
 		// DataColumnSidecarsByRoot v1 Message
 		RPCDataColumnSidecarsByRootTopicV1: p2ptypes.DataColumnsByRootIdentifiers{},
 	}
@@ -179,20 +189,21 @@ var (
 
 	// Maps all the protocol message names for the different rpc topics.
 	messageMapping = map[string]bool{
-		StatusMessageName:               true,
-		GoodbyeMessageName:              true,
-		BeaconBlocksByRangeMessageName:  true,
-		BeaconBlocksByRootsMessageName:  true,
-		PingMessageName:                 true,
-		MetadataMessageName:             true,
-		BlobSidecarsByRangeName:         true,
-		BlobSidecarsByRootName:          true,
-		LightClientBootstrapName:        true,
-		LightClientUpdatesByRangeName:   true,
-		LightClientFinalityUpdateName:   true,
-		LightClientOptimisticUpdateName: true,
-		DataColumnSidecarsByRootName:    true,
-		DataColumnSidecarsByRangeName:   true,
+		StatusMessageName:                    true,
+		GoodbyeMessageName:                   true,
+		BeaconBlocksByRangeMessageName:       true,
+		BeaconBlocksByRootsMessageName:       true,
+		PingMessageName:                      true,
+		MetadataMessageName:                  true,
+		BlobSidecarsByRangeName:              true,
+		BlobSidecarsByRootName:               true,
+		LightClientBootstrapName:             true,
+		LightClientUpdatesByRangeName:        true,
+		LightClientFinalityUpdateName:        true,
+		LightClientOptimisticUpdateName:      true,
+		DataColumnSidecarsByRootName:         true,
+		DataColumnSidecarsByRangeName:        true,
+		ExecutionPayloadEnvelopesByRangeName: true,
 	}
 
 	// Maps all the RPC messages which are to updated in altair.

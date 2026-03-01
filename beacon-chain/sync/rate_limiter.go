@@ -77,6 +77,9 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 	// for DataColumnSidecarsByRoot and DataColumnSidecarsByRange
 	dataColumnSidecars := leakybucket.NewCollector(allowedDataColumnsPerSecond, allowedDataColumnsBurst, blockBucketPeriod, false)
 
+	// for ExecutionPayloadEnvelopesByRange — one envelope per canonical block, same throughput profile as blocks.
+	envelopeCollector := leakybucket.NewCollector(allowedBlocksPerSecond, allowedBlocksBurst, blockBucketPeriod, false)
+
 	// BlocksByRoots requests
 	topicMap[addEncoding(p2p.RPCBlocksByRootTopicV1)] = blockCollector
 	topicMap[addEncoding(p2p.RPCBlocksByRootTopicV2)] = blockCollectorV2
@@ -100,6 +103,9 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 	topicMap[addEncoding(p2p.RPCDataColumnSidecarsByRootTopicV1)] = dataColumnSidecars
 	// DataColumnSidecarsByRangeV1
 	topicMap[addEncoding(p2p.RPCDataColumnSidecarsByRangeTopicV1)] = dataColumnSidecars
+
+	// ExecutionPayloadEnvelopesByRangeV1
+	topicMap[addEncoding(p2p.RPCExecutionPayloadEnvelopesByRangeTopicV1)] = envelopeCollector
 
 	// General topic for all rpc requests.
 	topicMap[rpcLimiterTopic] = leakybucket.NewCollector(5, defaultBurstLimit*2, leakyBucketPeriod, false /* deleteEmptyBuckets */)

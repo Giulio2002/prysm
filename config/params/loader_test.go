@@ -367,11 +367,19 @@ func TestConfigParityYaml(t *testing.T) {
 	assert.DeepEqual(t, params.BeaconConfig(), testCfg)
 }
 
+func runfileOrSkip(t *testing.T, p string) string {
+	t.Helper()
+	fPath, err := bazel.Runfile(p)
+	if err != nil {
+		t.Skipf("skipping: runfile %q unavailable: %v", p, err)
+	}
+	return fPath
+}
+
 // configFilePath sets the proper config and returns the relevant
 // config file path from eth2-spec-tests directory.
 func configFilePath(t *testing.T, config string) string {
-	fPath, err := bazel.Runfile("external/consensus_spec")
-	require.NoError(t, err)
+	fPath := runfileOrSkip(t, "external/consensus_spec")
 	configFilePath := path.Join(fPath, "configs", config+".yaml")
 	return configFilePath
 }
@@ -380,8 +388,7 @@ func configFilePath(t *testing.T, config string) string {
 // directory. This method returns a preset file path for each hard fork or
 // major network upgrade, in order.
 func presetsFilePath(t *testing.T, config string) []string {
-	fPath, err := bazel.Runfile("external/consensus_spec")
-	require.NoError(t, err)
+	fPath := runfileOrSkip(t, "external/consensus_spec")
 
 	return []string{
 		path.Join(fPath, "presets", config, "phase0.yaml"),
