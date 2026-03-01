@@ -236,6 +236,10 @@ func (s *Service) processFetchedDataRegSync(ctx context.Context, data *blocksQue
 				return uint64(i), err
 			}
 		}
+		// Block is now in fork-choice; fetch envelope for this Gloas-era block.
+		if b.Block.Version() >= version.Gloas {
+			s.fetchEnvelopesForBlocks(ctx, []blocks.ROBlock{b.Block})
+		}
 	}
 	return uint64(len(bwb)), nil
 }
@@ -453,6 +457,10 @@ func (s *Service) processBlocksWithDataColumns(ctx context.Context, bwbs []block
 		return errors.Wrap(err, "process post-Fulu blocks")
 	}
 
+	// Fetch execution payload envelopes for any Gloas-era blocks now that they
+	// are in fork-choice (ReceiveBlockBatch has already been called above).
+	s.fetchEnvelopesForBlocks(ctx, robs)
+
 	return nil
 }
 
@@ -498,4 +506,39 @@ func (s *Service) isProcessedBlock(ctx context.Context, blk blocks.ROBlock) bool
 func (s *Service) downscorePeer(peerID peer.ID, reason string) {
 	newScore := s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Increment(peerID)
 	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
+}
+
+// fetchEnvelopesForBlocks fetches execution payload envelopes for the given Gloas-era
+// blocks from the first available connected peer.  It is called after ReceiveBlock /
+// ReceiveBlockBatch so that the block is already in fork-choice before the envelope
+// is processed by ReceiveExecutionPayloadEnvelope.
+func (s *Service) fetchEnvelopesForBlocks(ctx context.Context, robs []blocks.ROBlock) {
+	gloasBlocks := make([]blocks.ROBlock, 0, len(robs))
+	for _, b := range robs {
+		if b.Version() >= version.Gloas {
+			gloasBlocks = append(gloasBlocks, b)
+		}
+	}
+	if len(gloasBlocks) == 0 {
+		return
+	}
+
+	connected := s.cfg.P2P.Peers().Connected()
+	if len(connected) == 0 {
+		log.Debug("No connected peers to fetch execution payload envelopes from")
+		return
+	}
+	pid := connected[0]
+
+	params := sync.ExecutionPayloadEnvelopesParams{
+		P2P:      s.cfg.P2P,
+		Tor:      s.clock,
+		CtxMap:   s.ctxMap,
+		BeaconDB: s.cfg.DB,
+		Chain:    s.cfg.Chain,
+	}
+
+	if err := sync.FetchExecutionPayloadEnvelopes(ctx, params, gloasBlocks, pid); err != nil {
+		log.WithError(err).Debug("Could not fetch execution payload envelopes")
+	}
 }

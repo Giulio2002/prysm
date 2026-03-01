@@ -43,6 +43,7 @@ var _ runtime.Service = (*Service)(nil)
 type blockchainService interface {
 	blockchain.BlockReceiver
 	blockchain.ChainInfoFetcher
+	blockchain.ExecutionPayloadEnvelopeReceiver
 }
 
 // Config to set up the initial sync service.

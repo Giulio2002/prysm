@@ -9,9 +9,9 @@ import (
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
-	engpb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
@@ -114,6 +114,21 @@ func (s *Service) streamEnvelopeBatch(ctx context.Context, batch blockBatch, wQu
 	_, span := trace.StartSpan(ctx, "sync.streamEnvelopeBatch")
 	defer span.End()
 
+	if s.cfg.executionReconstructor == nil {
+		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+		return wQuota, errors.New("execution reconstructor is nil")
+	}
+
+	// First pass: collect blinded envelopes and unique block hashes for batch reconstruction.
+	type blindedEntry struct {
+		root      [32]byte
+		blockHash [32]byte
+		env       *pb.SignedBlindedExecutionPayloadEnvelope
+	}
+	entries := make([]blindedEntry, 0, len(batch.canonical()))
+	hashSeen := make(map[[32]byte]struct{})
+	batchHashes := make([][32]byte, 0)
+
 	for _, b := range batch.canonical() {
 		root := b.Root()
 		if !s.cfg.beaconDB.HasExecutionPayloadEnvelope(ctx, root) {
@@ -125,29 +140,48 @@ func (s *Service) streamEnvelopeBatch(ctx context.Context, batch blockBatch, wQu
 			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 			return wQuota, errors.Wrapf(err, "could not retrieve execution payload envelope for root %#x", root)
 		}
+		if blindedEnv == nil || blindedEnv.Message == nil {
+			continue
+		}
+		blockHash := bytesutil.ToBytes32(blindedEnv.Message.BlockHash)
+		if _, ok := hashSeen[blockHash]; !ok {
+			hashSeen[blockHash] = struct{}{}
+			batchHashes = append(batchHashes, blockHash)
+		}
+		entries = append(entries, blindedEntry{root: root, blockHash: blockHash, env: blindedEnv})
+	}
 
-		// TODO: unblind the envelope by fetching the full execution payload from the EL.
+	if len(entries) == 0 {
+		return wQuota, nil
+	}
+
+	// Batch-reconstruct all full payloads in one EL call.
+	payloadByHash, err := s.cfg.executionReconstructor.ReconstructFullExecutionPayloadsByHash(ctx, batchHashes)
+	if err != nil {
+		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+		tracing.AnnotateError(span, err)
+		return wQuota, errors.Wrap(err, "batch reconstruct execution payloads for range request")
+	}
+
+	// Second pass: build full envelopes and stream them.
+	for _, entry := range entries {
+		payload := payloadByHash[entry.blockHash]
+		if payload == nil {
+			// EL didn't return this payload — skip rather than send garbage.
+			log.WithField("root", entry.root).Debug("Missing reconstructed payload for envelope in range batch")
+			continue
+		}
 		fullEnv := &pb.SignedExecutionPayloadEnvelope{
 			Message: &pb.ExecutionPayloadEnvelope{
-				Payload: &engpb.ExecutionPayloadDeneb{
-					ParentHash:    make([]byte, 32),
-					FeeRecipient:  make([]byte, 20),
-					StateRoot:     make([]byte, 32),
-					ReceiptsRoot:  make([]byte, 32),
-					LogsBloom:     make([]byte, 256),
-					PrevRandao:    make([]byte, 32),
-					BaseFeePerGas: make([]byte, 32),
-					BlockHash:     blindedEnv.Message.BlockHash,
-				},
-				ExecutionRequests: blindedEnv.Message.ExecutionRequests,
-				BuilderIndex:      blindedEnv.Message.BuilderIndex,
-				BeaconBlockRoot:   blindedEnv.Message.BeaconBlockRoot,
-				Slot:              blindedEnv.Message.Slot,
-				StateRoot:         blindedEnv.Message.StateRoot,
+				Payload:           payload,
+				ExecutionRequests: entry.env.Message.ExecutionRequests,
+				BuilderIndex:      entry.env.Message.BuilderIndex,
+				BeaconBlockRoot:   entry.env.Message.BeaconBlockRoot,
+				Slot:              entry.env.Message.Slot,
+				StateRoot:         entry.env.Message.StateRoot,
 			},
-			Signature: blindedEnv.Signature,
+			Signature: entry.env.Signature,
 		}
-
 		SetStreamWriteDeadline(stream, defaultWriteDuration)
 		if chunkErr := WriteExecutionPayloadEnvelopeChunk(stream, s.cfg.clock, s.cfg.p2p.Encoding(), fullEnv); chunkErr != nil {
 			log.WithError(chunkErr).Debug("Could not send execution payload envelope chunk")

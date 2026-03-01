@@ -140,14 +140,15 @@ type Reconstructor interface {
 	ReconstructFullExecutionPayloadsByHash(
 		ctx context.Context, blockHashes [][32]byte,
 	) (map[[32]byte]*pb.ExecutionPayloadDeneb, error)
-	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte, hi func(uint64) bool) ([]blocks.VerifiedROBlob, error)
+ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte, hi func(uint64) bool) ([]blocks.VerifiedROBlob, error)
 	ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, error)
+	ReconstructExecutionPayloadEnvelope(ctx context.Context, blinded *ethpb.SignedBlindedExecutionPayloadEnvelope) (*ethpb.SignedExecutionPayloadEnvelope, error)
 }
 
 // EngineCaller defines a client that can interact with an Ethereum
 // execution node's engine service via JSON-RPC.
 type EngineCaller interface {
-	NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error)
+	NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests, slot primitives.Slot) ([]byte, error)
 	ForkchoiceUpdated(
 		ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer,
 	) (*pb.PayloadIDBytes, []byte, error)
@@ -160,7 +161,7 @@ type EngineCaller interface {
 var ErrEmptyBlockHash = errors.New("Block hash is empty 0x0000...")
 
 // NewPayload request calls the engine_newPayloadVX method via JSON-RPC.
-func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error) {
+func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests, slot primitives.Slot) ([]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.NewPayload")
 	defer span.End()
 	defer func(start time.Time) {
@@ -665,6 +666,32 @@ func (s *Service) ReconstructFullExecutionPayloadByHash(
 		return nil, errors.New("execution payload not found")
 	}
 	return payload, nil
+}
+
+// ReconstructExecutionPayloadEnvelope reconstructs a full signed execution payload envelope from a blinded one
+// by fetching the full execution payload from the EL using the block hash.
+func (s *Service) ReconstructExecutionPayloadEnvelope(
+	ctx context.Context, blinded *ethpb.SignedBlindedExecutionPayloadEnvelope,
+) (*ethpb.SignedExecutionPayloadEnvelope, error) {
+	if blinded == nil || blinded.Message == nil {
+		return nil, errors.New("nil blinded execution payload envelope")
+	}
+	blockHash := bytesutil.ToBytes32(blinded.Message.BlockHash)
+	payload, err := s.ReconstructFullExecutionPayloadByHash(ctx, blockHash)
+	if err != nil {
+		return nil, errors.Wrap(err, "reconstruct execution payload envelope")
+	}
+	return &ethpb.SignedExecutionPayloadEnvelope{
+		Message: &ethpb.ExecutionPayloadEnvelope{
+			Payload:           payload,
+			ExecutionRequests: blinded.Message.ExecutionRequests,
+			BuilderIndex:      blinded.Message.BuilderIndex,
+			BeaconBlockRoot:   blinded.Message.BeaconBlockRoot,
+			Slot:              blinded.Message.Slot,
+			StateRoot:         blinded.Message.StateRoot,
+		},
+		Signature: blinded.Signature,
+	}, nil
 }
 
 // ReconstructFullExecutionPayloadsByHash reconstructs full deneb payloads from EL data by block hashes.
