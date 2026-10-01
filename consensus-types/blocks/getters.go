@@ -10,6 +10,7 @@ import (
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bendssz"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
@@ -670,7 +671,7 @@ func (b *SignedBeaconBlock) UnmarshalSSZ(buf []byte) error {
 			}
 		} else {
 			pb := &eth.SignedBeaconBlockFulu{}
-			if err := pb.UnmarshalSSZ(buf); err != nil {
+			if err := bendssz.UnmarshalSSZ(pb, buf); err != nil {
 				return err
 			}
 			var err error

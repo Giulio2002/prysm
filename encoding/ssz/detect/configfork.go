@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bendssz"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -167,7 +168,7 @@ func (cf *VersionedUnmarshaler) UnmarshalBeaconState(marshaled []byte) (s state.
 		}
 	case version.Fulu:
 		st := &ethpb.BeaconStateFulu{}
-		err = st.UnmarshalSSZ(marshaled)
+		err = bendssz.UnmarshalSSZ(st, marshaled)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to unmarshal state, detected fork=%s", forkName)
 		}
@@ -245,7 +246,7 @@ func (cf *VersionedUnmarshaler) UnmarshalBeaconBlock(marshaled []byte) (interfac
 		forkName := version.String(cf.Fork)
 		return nil, fmt.Errorf("unable to initialize ReadOnlyBeaconBlock for fork version=%s at slot=%d", forkName, slot)
 	}
-	err = blk.UnmarshalSSZ(marshaled)
+	err = bendssz.UnmarshalSSZ(blk, marshaled)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal ReadOnlySignedBeaconBlock in UnmarshalSSZ")
 	}
@@ -286,7 +287,7 @@ func (cf *VersionedUnmarshaler) UnmarshalBlindedBeaconBlock(marshaled []byte) (i
 		forkName := version.String(cf.Fork)
 		return nil, fmt.Errorf("unable to initialize ReadOnlyBeaconBlock for fork version=%s at slot=%d", forkName, slot)
 	}
-	err = blk.UnmarshalSSZ(marshaled)
+	err = bendssz.UnmarshalSSZ(blk, marshaled)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal ReadOnlySignedBeaconBlock in UnmarshalSSZ")
 	}

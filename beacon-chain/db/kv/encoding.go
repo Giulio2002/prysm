@@ -9,6 +9,7 @@ import (
 	"github.com/golang/snappy"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/OffchainLabs/prysm/v7/encoding/bendssz"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
@@ -26,7 +27,7 @@ func decode(ctx context.Context, data []byte, dst proto.Message) error {
 		return err
 	}
 	if isSSZStorageFormat(dst) {
-		return dst.(ssz.Unmarshaler).UnmarshalSSZ(data)
+		return bendssz.UnmarshalSSZ(dst.(ssz.Unmarshaler), data)
 	}
 	return proto.Unmarshal(data, dst)
 }

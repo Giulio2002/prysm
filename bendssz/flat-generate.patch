@@ -1,0 +1,101 @@
+--- a/codegen/generate.py	2026-10-01 03:11:56
++++ b/codegen/generate.py	2026-10-01 03:12:11
+@@ -323,0 +324 @@
++        emit_flat(s, w)
+@@ -339,0 +341 @@
++    emit_flat(s, w)
+@@ -1014,0 +1017,6 @@
++
++FLAT_SUBS = [
++    ('_dump(', '_flat('), ('_du_took(', '_fl_took('), ('_du(', '_fl('), ('_du_fin(', '_fl_fin('),
++    ('O.dump_le(', 'O.flat_le('), ('O.dump_bool(', 'O.flat_bool('), ('O.dump_u64(', 'O.flat_u64('),
++    ('O.dump_words_n(', 'O.flat_words_n('), ('O.dump_words(', 'O.flat_words('), ('O.dump_bits_n(', 'O.flat_bits_n('),
++]
+@@ -1015,0 +1024,26 @@
++
++def _flatten(lines):
++    out = []
++    for l in lines:
++        for a, b in FLAT_SUBS:
++            l = l.replace(a, b)
++        out.append(l)
++    return out
++
++
++def emit_flat(s, w):
++    """`{p}_flat(o, t)`: the dump again with one list item per 32-bit word instead of per byte
++    (bendssz FFI: the C stream is the items' little-endian words). Leaves are padded to whole words."""
++    buf = []
++    emit_dump(s, buf.append)
++    for l in _flatten(buf):
++        w(l)
++
++
++def emit_flat_fields(w, p, R, F):
++    buf = []
++    emit_dump_fields(buf.append, p, R, F)
++    for l in _flatten(buf):
++        w(l)
++
++
+@@ -2766,0 +2801 @@
++    emit_flat_fields(w, g.p, g.rep, g.fields)
+--- a/src/obj.bend	2026-10-01 03:11:56
++++ b/src/obj.bend	2026-10-01 03:12:11
+@@ -1418,0 +1419,6 @@
++
++# ---- the word-granular flat stream (bendssz FFI) ----------------------------
++# `{T}_flat(o, t)` is `{T}_dump` with one list item per 32-bit word: the same fields
++# in the same order with the same counts, every leaf padded to a whole number of words
++# (a byte count is still in bytes; a bit count in bits). The C side writes each item as
++# four little-endian bytes. Not part of the verified surface; it consumes the object.
+@@ -1419,0 +1426,49 @@
++def flat_le(+x: U32, +k: U32, t: +List<U32>) -> +List<U32>:
++  match k:
++    case 1: (x .&. 255 : U32) <> t
++    case 2: (x .&. 65535 : U32) <> t
++    case 3: (x .&. 16777215 : U32) <> t
++    case _: x <> t
++
++def flat_bool(b: Bool, t: +List<U32>) -> +List<U32>: pick(b, 1, 0) <> t
++
++def flat_u64(o: U64, t: +List<U32>) -> +List<U32>:
++  match o:
++    case U64{+lo, +hi}: lo <> (hi <> t)
++
++def fw_took(t: +List<U32>, pair: Array<U32> & U32) -> Array<U32> & +List<U32>:
++  (ws, +w) = pair
++  (ws, w <> t)
++
++def fw_step(+i: U32, st: Array<U32> & +List<U32>) -> Array<U32> & +List<U32>:
++  (ws, t) = st
++  fw_took(t, Array.get(U32, ws, i))
++
++# words j-1, j-2, ..., 0 of the packed array, prepended in that order
++def fw_go(+k: Nat, +j: U32, st: Array<U32> & +List<U32>) -> Array<U32> & +List<U32>:
++  match k:
++    case 0n: st
++    case 1n+q: fw_go(q, (j - 1 : U32), fw_step((j - 1 : U32), st))
++
++def fw_fin(st: Array<U32> & +List<U32>) -> +List<U32>:
++  (ws, t) = st
++  t
++
++# the first ceil(n / 4) words of packed storage
++def flat_bytes(ws: Array<U32>, +n: U32, t: +List<U32>) -> +List<U32>:
++  fw_fin(fw_go(U32.to_nat(U32.shrn((n + 3 : U32), 2n)), U32.shrn((n + 3 : U32), 2n), (ws, t)))
++
++def flat_words(w: Words, t: +List<U32>) -> +List<U32>:
++  match w:
++    case Words{ws, +n}: flat_bytes(ws, n, t)
++
++# a byte list: its length in bytes, then its words
++def flat_words_n(w: Words, t: +List<U32>) -> +List<U32>:
++  match w:
++    case Words{ws, +n}: n <> flat_bytes(ws, n, t)
++
++# a bit list: its bit count, then the words holding ceil(count / 8) bytes
++def flat_bits_n(b: Bits, t: +List<U32>) -> +List<U32>:
++  match b:
++    case Bits{ws, +k}: k <> flat_bytes(ws, U32.shrn((k + 7 : U32), 3n), t)
++

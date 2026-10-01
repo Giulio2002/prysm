@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bendssz"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/genesis"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -612,7 +613,7 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 		return statenative.InitializeFromProtoUnsafeGloas(protoState)
 	case hasFuluKey(enc):
 		protoState := &ethpb.BeaconStateFulu{}
-		if err := protoState.UnmarshalSSZ(enc[len(fuluKey):]); err != nil {
+		if err := bendssz.UnmarshalSSZ(protoState, enc[len(fuluKey):]); err != nil {
 			return nil, errors.Wrap(err, "failed to unmarshal encoding for Fulu")
 		}
 		ok, err := s.isStateValidatorMigrationOver()

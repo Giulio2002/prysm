@@ -17,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/container/slice"
+	"github.com/OffchainLabs/prysm/v7/encoding/bendssz"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -1192,7 +1193,7 @@ func unmarshalBlock(_ context.Context, enc []byte) (interfaces.ReadOnlySignedBea
 		}
 	case hasFuluKey(enc):
 		rawBlock = &ethpb.SignedBeaconBlockFulu{}
-		if err := rawBlock.UnmarshalSSZ(enc[len(fuluKey):]); err != nil {
+		if err := bendssz.UnmarshalSSZ(rawBlock, enc[len(fuluKey):]); err != nil {
 			return nil, errors.Wrap(err, "could not unmarshal Fulu block")
 		}
 	case hasFuluBlindKey(enc):

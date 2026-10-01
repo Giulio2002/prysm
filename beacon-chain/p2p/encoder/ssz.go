@@ -11,6 +11,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/encoding/bendssz"
 	"github.com/OffchainLabs/prysm/v7/math"
 )
 
@@ -76,7 +77,7 @@ func (_ SszNetworkEncoder) EncodeWithMaxLength(w io.Writer, msg ssz.Marshaler) (
 }
 
 func doDecode(b []byte, to ssz.Unmarshaler) error {
-	return to.UnmarshalSSZ(b)
+	return bendssz.UnmarshalSSZ(to, b)
 }
 
 // DecodeGossip decodes the bytes to the protobuf gossip message provided.
